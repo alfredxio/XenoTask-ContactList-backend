@@ -14,6 +14,13 @@ const checkJwt = auth({
   algorithms: ["RS256"],
 });
 
+const checkEmail = async (req, res, next) => {
+  //fetch and validate user email
+  const { email } = req.params;
+  console.log(email);
+  next();
+};
+
 mongoose.set('strictQuery', false);
 mongoose.connect(process.env.mongouri, {
   useNewUrlParser: true,
@@ -37,10 +44,9 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 //get all contacts
-app.get("/contacts/:email", checkJwt, async (req, res) => {
+app.get("/contacts/:email", checkJwt, checkEmail,async (req, res) => {
   try {
     const { email } = req.params;
-    console.log(email);
     const user = await User.findOne({ emailx: email });
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -53,7 +59,7 @@ app.get("/contacts/:email", checkJwt, async (req, res) => {
 });
 
 //add contact
-app.post("/contacts/:emailx", checkJwt, async (req, res) => {
+app.post("/contacts/:emailx", checkJwt,  checkEmail,async (req, res) => {
   try {
     const { emailx } = req.params;
 
@@ -75,40 +81,44 @@ app.post("/contacts/:emailx", checkJwt, async (req, res) => {
 });
 
   // Edit contact for a specific user
-  app.put("/contacts/:emailx/:contactId", checkJwt, async (req, res) => {
-    try {
-      const { emailx, contactId } = req.params;
+  app.put(
+    "/contacts/:emailx/:contactId",
+    checkJwt,
+    checkEmail,
+    async (req, res) => {
+      try {
+        const { emailx, contactId } = req.params;
   
-      const user = await User.findOne({ emailx });
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
+        const user = await User.findOne({ emailx });
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
+  
+        const { image_url, name, email, phone } = req.body;
+  
+        const contactIndex = user.contacts.findIndex(
+          (contact) => contact._id.toString() === contactId
+        );
+        if (contactIndex === -1) {
+          return res.status(404).json({ error: "Contact not found" });
+        }
+  
+        user.contacts[contactIndex].image_url = image_url;
+        user.contacts[contactIndex].name = name;
+        user.contacts[contactIndex].phone = phone;
+        user.contacts[contactIndex].email = email;
+        user.contacts[contactIndex].addedAt = Date.now();
+  
+        const response = await user.save();
+  
+        res.json(response);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to update contact" });
       }
-  
-      const { image_url, name, email, phone } = req.body;
-  
-      const contactIndex = user.contacts.findIndex(
-        (contact) => contact._id.toString() === contactId
-      );
-      if (contactIndex === -1) {
-        return res.status(404).json({ error: "Contact not found" });
-      }
-  
-      user.contacts[contactIndex].image_url = image_url;
-      user.contacts[contactIndex].name = name;
-      user.contacts[contactIndex].phone = phone;
-      user.contacts[contactIndex].email = email;
-      user.contacts[contactIndex].addedAt = Date.now();
-  
-      await user.save();
-  
-      res.json(user);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update contact" });
-    }
-  });
+    });
   
   // Delete contact for a specific user
-  app.delete("/contacts/:emailx/:id", checkJwt, async (req, res) => {
+  app.delete("/contacts/:emailx/:id", checkJwt, checkEmail,async (req, res) => {
     try {
       const { emailx, id } = req.params;
   
@@ -126,9 +136,9 @@ app.post("/contacts/:emailx", checkJwt, async (req, res) => {
   
       user.contacts.splice(contactIndex, 1);
   
-      await user.save();
-  
-      res.json(user);
+      const response = await user.save();
+      res.json(response);
+      
     } catch (error) {
       res.status(500).json({ error: "Failed to delete contact" });
     }
